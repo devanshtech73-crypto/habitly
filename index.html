@@ -24,15 +24,19 @@
     <script>
         // --- script.js content starts here (Client-side logic) ---
 
-        const SERVER_URL = 'strangeneo.gt.tc'; // The endpoint for our simulated backend
+        // ✨ IMPORTANT: Updated Server URL
+        const SERVER_BASE_URL = 'https://strangeneo.gt.tc/';
+        const SERVER_ENDPOINT = SERVER_BASE_URL + 'server.php'; 
+
         const APP_CONTAINER = document.getElementById('app-container');
         const SNACKBAR = document.getElementById('snackbar');
 
         /**
-         * API Interaction - Simulate AJAX calls to PHP backend
+         * API Interaction - AJAX calls to PHP backend
          */
         const API = {
             request: async (endpoint, method = 'GET', data = null) => {
+                const url = `${SERVER_ENDPOINT}?action=${endpoint}`;
                 const options = {
                     method: method,
                     headers: {
@@ -44,14 +48,19 @@
                 }
 
                 try {
-                    const response = await fetch(`${SERVER_URL}?action=${endpoint}`, options);
+                    const response = await fetch(url, options);
                     if (!response.ok) {
+                        // Attempt to read the error body if it exists
+                        const errorBody = await response.text();
+                        console.error("Server Response Error:", response.status, errorBody);
                         throw new Error(`HTTP error! status: ${response.status}`);
                     }
+                    // Handle 204 No Content gracefully if the server returns it
+                    if (response.status === 204) return { success: true };
                     return response.json();
                 } catch (error) {
                     console.error("API Request Failed:", error);
-                    alert("A server error occurred. See console for details.");
+                    alert(`API Request Failed: ${error.message}. Check console for details (often a server permission issue like 403).`);
                     return null;
                 }
             },
@@ -84,7 +93,7 @@
                         QuickPoll.renderCreatePoll();
                     }
                     APP_CONTAINER.classList.remove('fade-out');
-                }, 300); // Wait for fade-out transition
+                }, 300);
             },
 
             // --- Poll Creation ---
@@ -124,9 +133,9 @@
                     </div>
                 `;
             },
-            // (addOption, removeOption, reIndexOptions, updateAddOptionButtonState functions from previous script remain the same)
             
-            addOption: () => {
+            // Re-used helper functions for form manipulation (addOption, removeOption, reIndexOptions, updateAddOptionButtonState)
+            addOption: function() {
                 const container = document.getElementById('options-container');
                 const currentOptions = container.querySelectorAll('.option-group').length;
                 if (currentOptions < 6) {
@@ -136,7 +145,7 @@
                 QuickPoll.updateAddOptionButtonState();
             },
 
-            removeOption: (index) => {
+            removeOption: function(index) {
                 const elementToRemove = document.querySelector(`.option-group[data-index="${index}"]`);
                 if (elementToRemove) {
                     elementToRemove.remove();
@@ -145,10 +154,10 @@
                 QuickPoll.updateAddOptionButtonState();
             },
 
-            reIndexOptions: () => {
+            reIndexOptions: function() {
                 const container = document.getElementById('options-container');
                 const options = container.querySelectorAll('.poll-option-input');
-                container.innerHTML = ''; // Clear container
+                container.innerHTML = ''; 
 
                 options.forEach((input, i) => {
                     const newIndex = i + 1;
@@ -156,7 +165,7 @@
                 });
             },
 
-            updateAddOptionButtonState: () => {
+            updateAddOptionButtonState: function() {
                 const container = document.getElementById('options-container');
                 if (!container) return;
                 const currentOptions = container.querySelectorAll('.option-group').length;
@@ -177,7 +186,7 @@
                 const options = Array.from(optionInputs)
                     .map(input => ({
                         text: input.value.trim(),
-                        votes: 0 // Server will handle vote tally
+                        votes: 0
                     }))
                     .filter(option => option.text !== '');
 
@@ -188,34 +197,28 @@
 
                 const newPollData = { question, options };
                 
-                // 1. Send data to PHP backend
                 const response = await API.createPoll(newPollData);
 
                 if (response && response.pollId) {
-                    // Show success animation
                     const creatorCard = document.querySelector('.poll-creator');
                     creatorCard.classList.add('success-animation');
                     setTimeout(() => {
                         creatorCard.classList.remove('success-animation');
-                        window.location.hash = response.pollId; // Redirect to the new poll
+                        window.location.hash = response.pollId;
                     }, 800);
                 }
             },
 
             // --- Poll Viewing and Voting ---
             renderPollView: async (pollId) => {
-                // 1. Check if user has voted (Client-side tracking for demo)
                 const hasVoted = localStorage.getItem(`voted_${pollId}`) === 'true';
-
-                // 2. Fetch poll data from PHP backend
                 const poll = await API.getPoll(pollId);
 
                 if (!poll || poll.error) {
-                    APP_CONTAINER.innerHTML = '<section class="card error-message"><h2>Poll Not Found <i class="fas fa-frown"></i></h2><p>The poll ID is invalid or the poll was deleted.</p><a href="#">Start New Poll</a></section>';
+                    APP_CONTAINER.innerHTML = '<section class="card error-message"><h2>Poll Not Found <i class="fas fa-frown"></i></h2><p>The poll ID is invalid or a server error occurred.</p><a href="#">Start New Poll</a></section>';
                     return;
                 }
                 
-                // 3. Render the UI
                 APP_CONTAINER.innerHTML = `
                     <section class="card poll-view" id="poll-view-card">
                         <h2>${poll.question}</h2>
@@ -248,7 +251,6 @@
                 const icon = hasVoted ? 'fas fa-chart-line' : 'far fa-hand-pointer';
                 
                 if (hasVoted) {
-                    // Results View
                     return `
                         <div class="option-result">
                             <span class="option-text"><i class="${icon}"></i> ${option.text}</span>
@@ -259,7 +261,6 @@
                         </div>
                     `;
                 } else {
-                    // Voting View
                     return `
                         <button class="poll-option-btn" data-poll-id="${pollId}" data-option-index="${index}">
                             <i class="${icon}"></i> ${option.text}
@@ -273,25 +274,21 @@
                 const pollId = btn.dataset.pollId;
                 const optionIndex = parseInt(btn.dataset.optionIndex);
 
-                // Prevent multiple votes (Client-side check)
                 if (localStorage.getItem(`voted_${pollId}`) === 'true') {
                     return;
                 }
                 
-                // Add a temporary loading animation
                 btn.classList.add('voted-animation');
                 document.querySelectorAll('.poll-option-btn').forEach(b => b.disabled = true);
 
-                // 1. Send vote to PHP backend
                 const response = await API.vote(pollId, optionIndex);
 
                 if (response && response.success) {
-                    localStorage.setItem(`voted_${pollId}`, 'true'); // Mark as voted
-                    
-                    // 2. Re-render the view to show results
+                    localStorage.setItem(`voted_${pollId}`, 'true');
+                    localStorage.setItem(`lastVotedIndex_${pollId}`, optionIndex); // Track last voted option
                     QuickPoll.renderPollView(pollId);
                 } else {
-                    alert('Voting failed. Please try again.');
+                    alert('Voting failed. Server response error.');
                     document.querySelectorAll('.poll-option-btn').forEach(b => b.disabled = false);
                     btn.classList.remove('voted-animation');
                 }
@@ -305,20 +302,16 @@
                     const percentSpan = document.getElementById(`percent-${poll.id}-${index}`);
 
                     if (barFill) {
-                        // Animated bar filling
                         setTimeout(() => {
                              barFill.style.width = `${percentage.toFixed(1)}%`;
                         }, 100);
-                       
                     }
                     if (percentSpan) {
-                         // Update percentage text after a delay
                          setTimeout(() => {
                             percentSpan.textContent = `${percentage.toFixed(1)}% (${option.votes})`;
                         }, 600);
                     }
                     
-                    // Highlight the option that was voted for in this session
                     if (localStorage.getItem(`lastVotedIndex_${poll.id}`) == index) {
                         const resultDiv = barFill.closest('.option-result');
                         if(resultDiv) resultDiv.classList.add('my-vote-highlight');
@@ -348,5 +341,6 @@
 
         // --- script.js content ends here ---
     </script>
-</body>
+    
+    </body>
 </html>
